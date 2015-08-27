@@ -26,6 +26,11 @@ union Header {
 	char r[sizeof(H3lod)];
 };
 
+union File {
+	H3lod_file o;
+	char r[sizeof(H3lod_file)];
+};
+
 int main( int argc, char * argv[] )
 {
 	std::ifstream infile;
@@ -38,17 +43,31 @@ int main( int argc, char * argv[] )
 	if( infile.is_open() )
 	{
 		infile.read(header.r, sizeof(header.r));
-		//std::cout << header.o.magic << std::endl;
-		//std::cout << header.o.type << std::endl;
-		//std::cout << header.o.files_count << std::endl;
-		
-		
-		//infile.read(buffer, sizeof h3lod.magic);
-		//std::cout << buffer << std::endl;
-		//infile.read(buffer1, sizeof h3lod.type);
-		//std::cout << std::hex << buffer1[0] << buffer1[1] << buffer1[2] << buffer1[3] << std::endl;
-		//infile.read(buffer2, sizeof h3lod.files_count);
-		//std::cout <<std::hex <<  buffer2[0] << buffer2[1] << buffer2[2] << buffer2[3] << std::endl;
+
+		for( uint32_t i = 0 ; i < /*header.o.files_count*/1 ; i++ )
+		{
+			File f;
+			infile.read(f.r, sizeof(f.r));
+
+			std::ofstream outfile;
+			outfile.open(f.o.name);
+
+			uint32_t fileSize = f.o.size_compressed;
+			if(f.o.size_compressed == 0)
+			{
+				fileSize = f.o.size_original;
+			}
+
+			char* buffer = new char[fileSize];
+
+			int lastPos = infile.tellg();
+			infile.seekg(f.o.offset, infile.cur);
+			infile.read(buffer, fileSize);
+
+			outfile.write(buffer, fileSize);
+			
+			outfile.close();
+		}
 	}
 
 	infile.close();

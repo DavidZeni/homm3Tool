@@ -1,6 +1,12 @@
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
+
+#include "zlib.h"
+
+#include "SDL.h"
+#include "SDL_image.h"
 
 //#include <boost/filesystem.hpp>
 //#include <boost/program_options.hpp>
@@ -31,12 +37,62 @@ union File {
 	char r[sizeof(H3lod_file)];
 };
 
+bool isPCX( char* buffer, uint32_t bufferSize )
+{
+	if(bufferSize < (uint32_t)12)
+	{
+		return false;
+	}
+
+	uint32_t* bitmap_size = (uint32_t*)buffer;
+	uint32_t* width = (uint32_t*)(buffer+4);
+	uint32_t* height = (uint32_t*)(buffer+8);
+
+	return (*bitmap_size) == (*width)*(*height) || (*bitmap_size) == (*width)*(*height)*3;
+}
+
+bool convertToPNG( char* buffer, uint32_t bufferSize, const char* name )
+{
+	uint32_t* bitmap_size = (uint32_t*)buffer;
+	uint32_t* width = (uint32_t*)(buffer+4);
+	uint32_t* height = (uint32_t*)(buffer+8);
+
+	SDL_RWops* rw = nullptr;
+
+	rw = SDL_RWFromMem(buffer+12, (*bitmap_size));
+
+	SDL_Surface *temp = IMG_Load_RW(rw, 1);
+
+	if((*bitmap_size) == (*width)*(*height))
+	{
+		SDL_Color colors[256];
+
+		for(int j = 0 ; j < 256 ; j++)
+		{
+			colors[j].r = 0;
+			colors[j].g = 0;
+			colors[j].b = 0;
+		}
+
+		SDL_SetPalette(temp, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 256);
+	}
+	//else if((*bitmap_size) == (*width)*(*height)*3)
+	//{
+	//	SDL_Surface *temp = IMG_Load_RW(rw, 1);
+	//}
+
+	IMG_SavePNG(temp, name);
+
+	SDL_FreeSurface(temp);
+
+	return true;
+}
+
 int main( int argc, char * argv[] )
 {
 	std::ifstream infile;
-	infile.open( "H3bitmap.lod" );
-
-	H3lod h3lod;
+	//infile.open( "H3bitmap.lod" );
+	infile.open( "H3ab_bmp.lod" );
 
 	Header header;
 
@@ -44,29 +100,75 @@ int main( int argc, char * argv[] )
 	{
 		infile.read(header.r, sizeof(header.r));
 
-		for( uint32_t i = 0 ; i < /*header.o.files_count*/1 ; i++ )
+		for( uint32_t i = 0 ; i < header.o.files_count ; i++ )
 		{
 			File f;
 			infile.read(f.r, sizeof(f.r));
 
-			std::ofstream outfile;
-			outfile.open(f.o.name);
+			std::string filePath = "files/";
+			filePath += f.o.name;
 
-			uint32_t fileSize = f.o.size_compressed;
+			bool isCompressed = true;
+
+			uint32_t inFileSize = f.o.size_compressed;
+			uint32_t outFileSize = f.o.size_original;
+
 			if(f.o.size_compressed == 0)
 			{
-				fileSize = f.o.size_original;
+				isCompressed = false;
+				inFileSize = f.o.size_original;
 			}
 
-			char* buffer = new char[fileSize];
+			char* buffer = new char[inFileSize];
+			char* outBuffer = new char[outFileSize];
 
 			int lastPos = infile.tellg();
-			infile.seekg(f.o.offset, infile.cur);
-			infile.read(buffer, fileSize);
+			infile.seekg(f.o.offset, infile.beg);
+			infile.read(buffer, inFileSize);
 
-			outfile.write(buffer, fileSize);
-			
-			outfile.close();
+			if(isCompressed)
+			{
+				// zlib struct
+				z_stream infstream;
+				infstream.zalloc = Z_NULL;
+				infstream.zfree = Z_NULL;
+				infstream.opaque = Z_NULL;
+
+				// setup "b" as the input and "c" as the compressed output
+				infstream.avail_in = (uInt)inFileSize; // size of input
+				infstream.next_in = (Bytef *)buffer; // input char array
+				infstream.avail_out = (uInt)outFileSize; // size of output
+				infstream.next_out = (Bytef *)outBuffer; // output char array
+
+				// the actual DE-compression work.
+				inflateInit(&infstream);
+				inflate(&infstream, Z_NO_FLUSH);
+				inflateEnd(&infstream);
+			}
+			else
+			{
+				memcpy(outBuffer, buffer, inFileSize);
+			}
+
+			if(isPCX(outBuffer, outFileSize))
+			{
+				convertToPNG(outBuffer, outFileSize, filePath.c_str());
+			}
+			else
+			{
+				std::ofstream outfile;
+
+				outfile.open(filePath.c_str());
+
+				outfile.write(outBuffer, outFileSize);
+
+				outfile.close();
+			}
+
+			delete[] buffer;
+			delete[] outBuffer;
+
+			infile.seekg(lastPos, infile.beg);
 		}
 	}
 

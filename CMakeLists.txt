@@ -1,6 +1,11 @@
 project(lodTool)
 cmake_minimum_required(VERSION 3.0.2)
 
+set(CMAKE_MODULE_PATH
+	${CMAKE_MODULE_PATH}
+	${CMAKE_HOME_DIRECTORY}/CMake
+)
+
 # VCMI version
 set(${project}_VERSION_MAJOR 0)
 set(${project}_VERSION_MINOR 1)
@@ -11,8 +16,22 @@ option(ENABLE_INTERFACE "Enable compilation of Interface mode" OFF)
 set(CMAKE_AUTOMOC ON)
 
 find_package(ZLIB REQUIRED)
-find_package(Boost COMPONENTS filesystem program_options REQUIRED)
-include_directories( ${Boost_INCLUDE_DIRS} )
+if(ZLIB_FOUND)
+    include_directories(${ZLIB_INCLUDE_DIRS})
+endif()
+
+find_package(SDL2 REQUIRED)
+if(SDL2_FOUND)
+	include_directories(${SDL2_INCLUDE_DIR})
+endif()
+
+find_package(SDL2_image REQUIRED)
+if(SDL2_image_FOUND)
+	include_directories(${SDL2_IMAGE_INCLUDE_DIRS})
+endif()
+
+#find_package(Boost COMPONENTS filesystem program_options REQUIRED)
+#include_directories( ${Boost_INCLUDE_DIRS} )
 
 if(ENABLE_INTERFACE)
 	# Widgets finds its own dependencies (QtGui and QtCore).
@@ -40,4 +59,5 @@ set(${project}_SRCS
 )
 
 add_executable(lodTool ${${project}_SRCS})
-target_link_libraries(lodTool ${Boost_LIBRARIES})
+target_link_libraries(lodTool ${ZLIB_LIBRARIES} ${SDL2_LIBRARY} ${SDL2_IMAGE_LIBRARIES})
+#target_link_libraries(lodTool ${Boost_LIBRARIES})

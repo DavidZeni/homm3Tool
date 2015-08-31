@@ -7,6 +7,7 @@
 
 #include "SDL.h"
 #include "SDL_image.h"
+#include "SDL_video.h"
 
 //#include <boost/filesystem.hpp>
 //#include <boost/program_options.hpp>
@@ -51,39 +52,75 @@ bool isPCX( char* buffer, uint32_t bufferSize )
 	return (*bitmap_size) == (*width)*(*height) || (*bitmap_size) == (*width)*(*height)*3;
 }
 
-bool convertToPNG( char* buffer, uint32_t bufferSize, const char* name )
+bool saveToPNG( char* buffer, uint32_t bufferSize, std::string& filePath )
 {
-	uint32_t* bitmap_size = (uint32_t*)buffer;
-	uint32_t* width = (uint32_t*)(buffer+4);
-	uint32_t* height = (uint32_t*)(buffer+8);
+	int it = 0;
 
-	SDL_RWops* rw = nullptr;
+	uint32_t bitmap_size = *((uint32_t*)(buffer + it));
+	it += 4;
+	uint32_t width = *((uint32_t*)(buffer + it));
+	it += 4;
+	uint32_t height = *((uint32_t*)(buffer + it));
+	it += 4;
 
-	rw = SDL_RWFromMem(buffer+12, (*bitmap_size));
+	SDL_Surface *surface = nullptr;
 
-	SDL_Surface *temp = IMG_Load_RW(rw, 1);
-
-	if((*bitmap_size) == (*width)*(*height))
+	if(bitmap_size == width * height)
 	{
-		SDL_Color colors[256];
+		surface = SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 8, 0, 0, 0, 0);
 
-		for(int j = 0 ; j < 256 ; j++)
+		it = 0xC;
+		for (int i = 0; i < height; i++)
 		{
-			colors[j].r = 0;
-			colors[j].g = 0;
-			colors[j].b = 0;
+			memcpy((char*)surface->pixels + surface->pitch * i, buffer + it, width);
+			it+= width;
 		}
 
-		SDL_SetPalette(temp, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 256);
+		//palette - last 256*3 bytes
+		it = bufferSize-256*3;
+		for (int i=0;i<256;i++)
+		{
+			SDL_Color tp;
+			tp.r = buffer[it++];
+			tp.g = buffer[it++];
+			tp.b = buffer[it++];
+			tp.a = SDL_ALPHA_OPAQUE;
+			surface->format->palette->colors[i] = tp;
+		}
 	}
-	//else if((*bitmap_size) == (*width)*(*height)*3)
-	//{
-	//	SDL_Surface *temp = IMG_Load_RW(rw, 1);
-	//}
+	else if(bitmap_size == width * height * 3)
+	{
+#if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
+		int bmask = 0xff0000;
+		int gmask = 0x00ff00;
+		int rmask = 0x0000ff;
+#else
+		int bmask = 0x0000ff;
+		int gmask = 0x00ff00;
+		int rmask = 0xff0000;
+#endif
+		surface = SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 24, rmask, gmask, bmask, 0);
 
-	IMG_SavePNG(temp, name);
+		for (int i = 0; i < height; i++)
+		{
+			memcpy((char*)surface->pixels + surface->pitch * i, buffer + it, width * 3);
+			it += width * 3;
+		}
 
-	SDL_FreeSurface(temp);
+	}
+	else
+	{
+		SDL_FreeSurface(surface);
+		return false;
+	}
+
+	std::size_t found = filePath.find_last_of(".");
+
+	filePath.replace(filePath.begin()+found, filePath.end(), ".png");
+
+	IMG_SavePNG(surface, filePath.c_str());
+
+	SDL_FreeSurface(surface);
 
 	return true;
 }
@@ -92,7 +129,7 @@ int main( int argc, char * argv[] )
 {
 	std::ifstream infile;
 	//infile.open( "H3bitmap.lod" );
-	infile.open( "H3ab_bmp.lod" );
+	infile.open( "H3bitmap.lod" );
 
 	Header header;
 
@@ -152,13 +189,13 @@ int main( int argc, char * argv[] )
 
 			if(isPCX(outBuffer, outFileSize))
 			{
-				convertToPNG(outBuffer, outFileSize, filePath.c_str());
+				saveToPNG(outBuffer, outFileSize, filePath);
 			}
 			else
 			{
 				std::ofstream outfile;
 
-				outfile.open(filePath.c_str());
+				outfile.open(filePath);
 
 				outfile.write(outBuffer, outFileSize);
 

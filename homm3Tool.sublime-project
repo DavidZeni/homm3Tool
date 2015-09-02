@@ -1,0 +1,23 @@
+{
+	"folders":
+	[
+		{
+			"path": "."
+		}
+	],
+    "build_systems":
+    [
+        {
+            "name": "CMake",
+            "cmd": ["cmake", "."],
+            "working_dir": "${project_path}/build",
+            "selector": ["source.cmake"]
+        },
+        {
+            "name": "Ninja",
+            "cmd": ["ninja"],
+            "working_dir": "${project_path}/build",
+            "selector": ["source.c++.11"]
+        }
+    ]
+}

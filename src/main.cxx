@@ -10,7 +10,7 @@
 #include "SDL_video.h"
 
 //#include <boost/filesystem.hpp>
-//#include <boost/program_options.hpp>
+#include <boost/program_options.hpp>
 
 struct H3lod {
 	uint32_t magic; // always 0x00444f4c, that is, a null-terminated "LOD" string
